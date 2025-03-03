@@ -1,20 +1,11 @@
-import {
-  DynamoDBClient,
-  PutItemCommand,
-  GetItemCommand,
-  UpdateItemCommand,
-} from "@aws-sdk/client-dynamodb";
-import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import * as bcrypt from "bcrypt";
 import { env } from "../config/env";
-import { User } from "../models/user";
-import { DynamoDBGetItemResponse } from "../types/dynamodb";
-import { generateToken, getAuthenticatedUser } from "../utils/jwtUtils";
+import * as jwt from "jsonwebtoken";
+import { User, UserModel } from "../models/user";
+import { JwtPayload } from "../types/auth";
+import { generateToken } from "../utils/jwtUtils";
 import { getCurrentISOString } from "../utils/dateUtils";
 
-const client = new DynamoDBClient({ region: env.AWS_REGION });
-
-// Registro de um novo usuário
 export const register = async (
   userData: Partial<User>
 ): Promise<{ user: User; token: string }> => {
@@ -28,7 +19,7 @@ export const register = async (
   const user: User = {
     id,
     email,
-    password,
+    password: passwordHash,
     role: role as "organizer" | "customer",
     name,
     phone,
@@ -36,34 +27,18 @@ export const register = async (
     updated_at: getCurrentISOString(),
   };
 
-  await client.send(
-    new PutItemCommand({
-      TableName: env.DYNAMODB_TABLE_USERS,
-      Item: marshall({ ...user, password_hash: passwordHash }),
-      ConditionExpression: "attribute_not_exists(email)", // Evita duplicatas
-    })
-  );
+  await UserModel.create({ ...user, password_hash: passwordHash });
 
   const token = generateToken(user);
   return { user, token };
 };
 
-// Login de um usuário
 export const login = async (
   email: string,
   password: string
 ): Promise<{ user: User; token: string }> => {
-  const response: DynamoDBGetItemResponse = await client.send(
-    new GetItemCommand({
-      TableName: env.DYNAMODB_TABLE_USERS,
-      Key: marshall({ email }),
-    })
-  );
-
-  if (!response.Item) throw new Error("User not found");
-  const userData = unmarshall(response.Item) as User & {
-    password_hash: string;
-  };
+  const userData = await UserModel.findOne({ email }).exec();
+  if (!userData) throw new Error("User not found");
 
   const isValid = await bcrypt.compare(password, userData.password_hash);
   if (!isValid) throw new Error("Invalid password");
@@ -71,10 +46,10 @@ export const login = async (
   const user: User = {
     id: userData.id,
     email: userData.email,
-    password: userData.password,
-    role: userData.role,
+    password: userData.password_hash,
+    role: userData.role as "organizer" | "customer",
     name: userData.name,
-    phone: userData.phone,
+    phone: userData.phone ?? undefined,
     created_at: userData.created_at,
     updated_at: userData.updated_at,
   };
@@ -83,55 +58,39 @@ export const login = async (
   return { user, token };
 };
 
-// Solicitação de recuperação de senha (simulação)
 export const forgotPassword = async (email: string): Promise<void> => {
-  const response: DynamoDBGetItemResponse = await client.send(
-    new GetItemCommand({
-      TableName: env.DYNAMODB_TABLE_USERS,
-      Key: marshall({ email }),
-    })
-  );
-
-  if (!response.Item) throw new Error("User not found");
-  // TODO: Integrar com Amazon SNS para envio de email em produção
+  const user = await UserModel.findOne({ email }).exec();
+  if (!user) throw new Error("User not found");
+  // Simulação: em produção, enviar email via serviço externo
   console.log(`Reset password requested for ${email}`);
 };
 
-// Redefinição de senha
 export const resetPassword = async (
   email: string,
   newPassword: string
 ): Promise<void> => {
   const passwordHash = await bcrypt.hash(newPassword, 10);
-
-  await client.send(
-    new UpdateItemCommand({
-      TableName: env.DYNAMODB_TABLE_USERS,
-      Key: marshall({ email }),
-      UpdateExpression: "SET password_hash = :ph, updated_at = :ua",
-      ExpressionAttributeValues: marshall({
-        ":ph": passwordHash,
-        ":ua": getCurrentISOString(),
-      }),
-    })
-  );
+  const result = await UserModel.updateOne(
+    { email },
+    { password_hash: passwordHash, updated_at: getCurrentISOString() }
+  ).exec();
+  if (result.modifiedCount === 0) throw new Error("User not found");
 };
 
-// Validação de token (usado em Lambda para autenticação)
 export const validateToken = async (token: string): Promise<User> => {
-  const { id, email, role } = getAuthenticatedUser(token);
+  const { id, email, role } = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+  const userData = await UserModel.findOne({ email }).exec();
+  if (!userData || userData.id !== id || userData.role !== role)
+    throw new Error("Invalid token");
 
-  const response: DynamoDBGetItemResponse = await client.send(
-    new GetItemCommand({
-      TableName: env.DYNAMODB_TABLE_USERS,
-      Key: marshall({ email }),
-    })
-  );
-
-  if (!response.Item) throw new Error("User not found");
-  const user = unmarshall(response.Item) as User;
-  if (user.id !== id || user.role !== role)
-    throw new Error("Invalid token data");
-
-  return user;
+  return {
+    id: userData.id,
+    email: userData.email,
+    password: userData.password_hash,
+    role: userData.role as "organizer" | "customer",
+    name: userData.name,
+    phone: userData.phone ?? undefined,
+    created_at: userData.created_at,
+    updated_at: userData.updated_at,
+  };
 };

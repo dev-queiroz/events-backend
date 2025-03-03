@@ -1,7 +1,6 @@
 import QRCode from "qrcode";
 import { Reservation } from "../models/reservation";
 
-// Gera um QR code como string SVG para uma reserva
 export const generateQRCode = async (
   reservation: Reservation
 ): Promise<string> => {
@@ -29,12 +28,11 @@ export const generateQRCode = async (
   }
 };
 
-// Valida a existência de um QR code (opcional, para uso futuro)
 export const validateQRCode = async (
   qrCodeString: string
 ): Promise<boolean> => {
   try {
-    return !!qrCodeString; // Simples validação por enquanto
+    return !!qrCodeString;
   } catch (error) {
     return false;
   }

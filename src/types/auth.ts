@@ -7,7 +7,7 @@ export interface JwtPayload {
   exp?: number; // Expiration (opcional)
 }
 
-// Usuário autenticado anexado ao contexto
+// Usuário autenticado
 export interface AuthenticatedUser {
   id: string;
   email: string;

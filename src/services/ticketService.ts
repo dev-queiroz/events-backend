@@ -1,22 +1,6 @@
-import {
-  DynamoDBClient,
-  PutItemCommand,
-  QueryCommand,
-  UpdateItemCommand,
-  DeleteItemCommand,
-} from "@aws-sdk/client-dynamodb";
-import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
-import { env } from "../config/env";
-import { TicketType } from "../models/ticketType";
-import {
-  DynamoDBScanResponse,
-  DynamoDBUpdateItemResponse,
-} from "../types/dynamodb";
+import { TicketType, TicketTypeModel } from "../models/ticketType";
 import { getCurrentISOString } from "../utils/dateUtils";
 
-const client = new DynamoDBClient({ region: env.AWS_REGION });
-
-// Criar um novo tipo de ingresso
 export const createTicketType = async (
   ticketData: Partial<TicketType>
 ): Promise<TicketType> => {
@@ -30,69 +14,36 @@ export const createTicketType = async (
     updated_at: getCurrentISOString(),
   };
 
-  await client.send(
-    new PutItemCommand({
-      TableName: env.DYNAMODB_TABLE_TICKETS,
-      Item: marshall(ticket),
-    })
-  );
-
+  await TicketTypeModel.create(ticket);
   return ticket;
 };
 
-// Listar tipos de ingressos por evento
 export const getTicketTypesByEvent = async (
   eventId: string
 ): Promise<TicketType[]> => {
-  const response: DynamoDBScanResponse = await client.send(
-    new QueryCommand({
-      TableName: env.DYNAMODB_TABLE_TICKETS,
-      IndexName: "EventIdIndex", // Índice secundário necessário no DynamoDB
-      KeyConditionExpression: "event_id = :eid",
-      ExpressionAttributeValues: marshall({ ":eid": eventId }),
-    })
-  );
-
-  return response.Items
-    ? response.Items.map((item) => unmarshall(item) as TicketType)
-    : [];
+  return TicketTypeModel.find({ event_id: eventId }).exec();
 };
 
-// Atualizar um tipo de ingresso
 export const updateTicketType = async (
   ticketId: string,
   ticketData: Partial<TicketType>
 ): Promise<TicketType> => {
-  const response: DynamoDBUpdateItemResponse = await client.send(
-    new UpdateItemCommand({
-      TableName: env.DYNAMODB_TABLE_TICKETS,
-      Key: marshall({ id: ticketId }),
-      UpdateExpression: "SET #n = :n, #p = :p, #qa = :qa, #ua = :ua",
-      ExpressionAttributeNames: {
-        "#n": "name",
-        "#p": "price",
-        "#qa": "quantity_available",
-        "#ua": "updated_at",
-      },
-      ExpressionAttributeValues: marshall({
-        ":n": ticketData.name || "",
-        ":p": ticketData.price || 0,
-        ":qa": ticketData.quantity_available || 0,
-        ":ua": getCurrentISOString(),
-      }),
-      ReturnValues: "ALL_NEW",
-    })
-  );
+  const updatedTicket = {
+    ...ticketData,
+    updated_at: getCurrentISOString(),
+  };
 
-  return unmarshall(response.Attributes!) as TicketType;
+  const result = await TicketTypeModel.findOneAndUpdate(
+    { id: ticketId },
+    updatedTicket,
+    { new: true }
+  ).exec();
+
+  if (!result) throw new Error("Ticket type not found");
+  return result.toObject() as TicketType;
 };
 
-// Excluir um tipo de ingresso
 export const deleteTicketType = async (ticketId: string): Promise<void> => {
-  await client.send(
-    new DeleteItemCommand({
-      TableName: env.DYNAMODB_TABLE_TICKETS,
-      Key: marshall({ id: ticketId }),
-    })
-  );
+  const result = await TicketTypeModel.deleteOne({ id: ticketId }).exec();
+  if (result.deletedCount === 0) throw new Error("Ticket type not found");
 };

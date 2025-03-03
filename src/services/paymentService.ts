@@ -1,22 +1,7 @@
-import {
-  DynamoDBClient,
-  PutItemCommand,
-  UpdateItemCommand,
-  GetItemCommand,
-} from "@aws-sdk/client-dynamodb";
-import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
-import { env } from "../config/env";
-import { Payment } from "../models/payment";
-import {
-  DynamoDBGetItemResponse,
-  DynamoDBUpdateItemResponse,
-} from "../types/dynamodb";
-import { confirmReservation } from "./reservationService";
+import { Payment, PaymentModel } from "../models/payment";
 import { getCurrentISOString } from "../utils/dateUtils";
+import { confirmReservation } from "./reservationService";
 
-const client = new DynamoDBClient({ region: env.AWS_REGION });
-
-// Criar um novo pagamento
 export const createPayment = async (
   reservationId: string,
   amount: number,
@@ -33,63 +18,34 @@ export const createPayment = async (
     updated_at: getCurrentISOString(),
   };
 
-  await client.send(
-    new PutItemCommand({
-      TableName: env.DYNAMODB_TABLE_PAYMENTS,
-      Item: marshall(payment),
-    })
-  );
-
+  await PaymentModel.create(payment);
   return payment;
 };
 
-// Processar pagamento (simulação de webhook)
 export const processPayment = async (
   paymentId: string,
   transactionId: string
 ): Promise<Payment> => {
-  const paymentResponse: DynamoDBGetItemResponse = await client.send(
-    new GetItemCommand({
-      TableName: env.DYNAMODB_TABLE_PAYMENTS,
-      Key: marshall({ id: paymentId }),
-    })
-  );
+  const payment = await PaymentModel.findOne({ id: paymentId }).exec();
+  if (!payment) throw new Error("Payment not found");
 
-  if (!paymentResponse.Item) throw new Error("Payment not found");
-  const payment = unmarshall(paymentResponse.Item) as Payment;
+  const result = await PaymentModel.findOneAndUpdate(
+    { id: paymentId },
+    {
+      status: "completed",
+      transaction_id: transactionId,
+      updated_at: getCurrentISOString(),
+    },
+    { new: true }
+  ).exec();
 
-  const response: DynamoDBUpdateItemResponse = await client.send(
-    new UpdateItemCommand({
-      TableName: env.DYNAMODB_TABLE_PAYMENTS,
-      Key: marshall({ id: paymentId }),
-      UpdateExpression: "SET #s = :s, #tid = :tid, #ua = :ua",
-      ExpressionAttributeNames: {
-        "#s": "status",
-        "#tid": "transaction_id",
-        "#ua": "updated_at",
-      },
-      ExpressionAttributeValues: marshall({
-        ":s": "completed",
-        ":tid": transactionId,
-        ":ua": getCurrentISOString(),
-      }),
-      ReturnValues: "ALL_NEW",
-    })
-  );
-
-  await confirmReservation(payment.reservation_id);
-  return unmarshall(response.Attributes!) as Payment;
+  if (!result) throw new Error("Payment not found");
+  await confirmReservation(payment.reservation_id); // Confirma a reserva associada
+  return result.toObject() as Payment;
 };
 
-// Obter um pagamento por ID
 export const getPaymentById = async (paymentId: string): Promise<Payment> => {
-  const response: DynamoDBGetItemResponse = await client.send(
-    new GetItemCommand({
-      TableName: env.DYNAMODB_TABLE_PAYMENTS,
-      Key: marshall({ id: paymentId }),
-    })
-  );
-
-  if (!response.Item) throw new Error("Payment not found");
-  return unmarshall(response.Item) as Payment;
+  const payment = await PaymentModel.findOne({ id: paymentId }).exec();
+  if (!payment) throw new Error("Payment not found");
+  return payment.toObject() as Payment;
 };

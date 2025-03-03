@@ -2,7 +2,6 @@ import * as jwt from "jsonwebtoken";
 import { env } from "../config/env";
 import { JwtPayload, AuthenticatedUser } from "../types/auth";
 
-// Gera um token JWT
 export const generateToken = (user: AuthenticatedUser): string => {
   const payload: JwtPayload = {
     id: user.id,
@@ -12,7 +11,6 @@ export const generateToken = (user: AuthenticatedUser): string => {
   return jwt.sign(payload, env.JWT_SECRET, { expiresIn: "1h" });
 };
 
-// Valida e decodifica um token JWT
 export const verifyToken = (token: string): JwtPayload => {
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
@@ -29,7 +27,6 @@ export const verifyToken = (token: string): JwtPayload => {
   }
 };
 
-// Extrai o usuário autenticado do token
 export const getAuthenticatedUser = (token: string): AuthenticatedUser => {
   const payload = verifyToken(token);
   return {

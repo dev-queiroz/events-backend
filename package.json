@@ -1,24 +1,30 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Backend serverless para a Plataforma de Reservas para Eventos",
+  "main": "dist/app.js",
   "scripts": {
-    "start": "node dist/index.js",
     "build": "tsc",
-    "dev": "nodemon --exec ts-node src/index.ts"
+    "deploy": "vercel",
+    "clean": "rm -rf dist"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "serverless",
+    "vercel",
+    "mongodb"
+  ],
+  "author": "Douglas Vinícios dos Santos Queiroz",
   "license": "",
   "type": "commonjs",
   "devDependencies": {
+    "@types/archiver": "^6.0.3",
     "@types/aws-lambda": "^8.10.147",
     "@types/bcrypt": "^5.0.0",
+    "@types/dotenv": "^6.1.1",
     "@types/jsonwebtoken": "^9.0.0",
+    "@types/mongoose": "^5.11.96",
     "@types/node": "^20.0.0",
     "@types/qrcode": "^1.5.0",
-    "nodemon": "^2.0.15",
     "ts-node": "^10.9.1",
     "typescript": "^5.0.0"
   },
@@ -26,9 +32,12 @@
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/client-s3": "^3.0.0",
     "@aws-sdk/util-dynamodb": "^3.0.0",
+    "archiver": "^5.3.1",
     "aws-lambda": "^1.0.7",
     "bcrypt": "^5.0.0",
+    "dotenv": "^16.4.7",
     "jsonwebtoken": "^9.0.0",
+    "mongoose": "^8.11.0",
     "qrcode": "^1.5.3"
   }
 }

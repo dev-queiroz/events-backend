@@ -1,16 +1,16 @@
 import { APIGatewayProxyEvent } from "aws-lambda";
 import * as jwt from "jsonwebtoken";
-import { env } from "../../config/env";
+import { env } from "../../src/config/env";
 import {
   updateTicketType,
   getTicketTypesByEvent,
-} from "../../services/ticketService";
-import { TicketType } from "../../models/ticketType";
+} from "../../src/services/ticketService";
+import { TicketType } from "../../src/models/ticketType";
 import {
   AuthenticatedAPIGatewayProxyEvent,
   LambdaResponse,
-} from "../../types/lambda";
-import { JwtPayload } from "../../types/auth";
+} from "../../src/types/lambda";
+import { JwtPayload } from "../../src/types/auth";
 
 export const handler = async (
   proxyEvent: APIGatewayProxyEvent
@@ -103,6 +103,6 @@ export const handler = async (
 
 // Função auxiliar para buscar evento (se não estiver em ticketService.ts)
 async function getEventById(eventId: string): Promise<any> {
-  const { getEventById } = await import("../../services/eventService");
+  const { getEventById } = await import("../../src/services/eventService");
   return getEventById(eventId);
 }
